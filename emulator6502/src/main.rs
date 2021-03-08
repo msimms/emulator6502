@@ -1,6 +1,12 @@
 const MEM_SIZE: usize = 1024 * 64;
 
+// LDA
 const INSTR_LDA_IM: u8 = 0xa9;
+const INSTR_LDA_ZERO_PAGE: u8 = 0xa5;
+const INSTR_LDA_ZERO_PAGE_X: u8 = 0xb5;
+const INSTR_LDA_ABSOLUTE: u8 = 0xad;
+const INSTR_LDA_ABSOLUTE_X: u8 = 0xbd;
+const INSTR_LDA_ABSOLUTE_Y: u8 = 0xb9;
 
 const STATUS_FLAG_N: u8 = 0x80;
 const STATUS_FLAG_V: u8 = 0x40;
@@ -72,9 +78,15 @@ fn execute(cpu: &mut Cpu, mem: &mut Mem) {
         // Get the next instruction.
         let instr = fetch_next_byte(cpu, mem);
 
+        // Execute the next instruction.
         match instr {
             INSTR_LDA_IM => do_lda_im(cpu, mem),
-            _ => {},
+            INSTR_LDA_ZERO_PAGE => {},
+            INSTR_LDA_ZERO_PAGE_X => {},
+            INSTR_LDA_ABSOLUTE => {},
+            INSTR_LDA_ABSOLUTE_X => {},
+            INSTR_LDA_ABSOLUTE_Y => {},
+            _ => println!("Instruction not handled."),
         }
 
         // Decrement the cycle counter.
