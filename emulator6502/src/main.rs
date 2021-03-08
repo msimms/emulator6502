@@ -1,5 +1,8 @@
 const MEM_SIZE: usize = 1024 * 64;
 
+// JSR
+const INSTR_JSR: u8 = 0x20;
+
 // LDA
 const INSTR_LDA_IM: u8 = 0xa9;
 const INSTR_LDA_ZERO_PAGE: u8 = 0xa5;
@@ -41,12 +44,6 @@ fn reset(cpu: &mut Cpu, mem: &mut Mem) {
     mem.data = [0; MEM_SIZE];
 }
 
-fn fetch_next_byte(cpu: &mut Cpu, mem: &mut Mem) -> u8 {
-    let intr = mem.data[cpu.pc as usize];
-    cpu.pc = cpu.pc + 1;
-    intr
-}
-
 fn set_status_flag(cpu: &mut Cpu, flag: u8) {
     cpu.status = cpu.status | flag;
 }
@@ -64,11 +61,79 @@ fn toggle_status_flag(cpu: &mut Cpu, flag: u8, condition: bool) {
     }
 }
 
-fn do_lda_im(cpu: &mut Cpu, mem: &mut Mem) {
-    cpu.a = fetch_next_byte(cpu, mem);
+fn fetch_next_byte(cpu: &mut Cpu, mem: &mut Mem) -> u8 {
+    let data = mem.data[cpu.pc as usize];
+    cpu.pc = cpu.pc + 1;
+    cpu.ticks = cpu.ticks + 1;
+    data
+}
+
+fn fetch_next_word(cpu: &mut Cpu, mem: &mut Mem) -> u16 {
+    let b1 = fetch_next_byte(cpu, mem);
+    let b2 = fetch_next_byte(cpu, mem);
+    let data = (b1 as u16) | (b2 as u16) << 8;
+    data
+}
+
+fn read_byte(cpu: &mut Cpu, mem: &mut Mem, addr: u8) -> u8 {
+    let data = mem.data[addr as usize];
+    cpu.ticks = cpu.ticks + 1;
+    data
+}
+
+fn write_byte(cpu: &mut Cpu, mem: &mut Mem, addr: u16, data: u8) {
+    mem.data[addr as usize] = data;
+    cpu.ticks = cpu.ticks + 1;
+}
+
+fn write_word(cpu: &mut Cpu, mem: &mut Mem, addr: u16, data: u16) {
+    mem.data[addr as usize] = (data & 0xff) as u8;
+    mem.data[(addr + 1) as usize] = ((data >> 8) & 0xff) as u8;
+    cpu.ticks = cpu.ticks + 2;
+}
+
+fn push_byte(cpu: &mut Cpu, mem: &mut Mem, data: u8) {
+    write_byte(cpu, mem, cpu.sp, data);
+    cpu.sp = cpu.sp + 1;
+    cpu.ticks = cpu.ticks + 1;
+}
+
+fn push_word(cpu: &mut Cpu, mem: &mut Mem, data: u16) {
+    write_word(cpu, mem, cpu.sp, data);
+    cpu.sp = cpu.sp + 2;
+    cpu.ticks = cpu.ticks + 1;
+}
+
+fn do_jsr(cpu: &mut Cpu, mem: &mut Mem) {
+    let addr = fetch_next_word(cpu , mem);
+    push_word(cpu, mem, cpu.pc - 1);
+    cpu.pc = addr;
+    cpu.ticks = cpu.ticks + 1;
+}
+
+fn lda_set_status(cpu: &mut Cpu) {
     toggle_status_flag(cpu, STATUS_FLAG_Z, cpu.a == 0);
     toggle_status_flag(cpu, STATUS_FLAG_N, cpu.a & 0x80 == 1);
-    cpu.ticks = cpu.ticks + 2;
+    cpu.ticks = cpu.ticks + 1;
+}
+
+fn do_lda_im(cpu: &mut Cpu, mem: &mut Mem) {
+    cpu.a = fetch_next_byte(cpu, mem);
+    lda_set_status(cpu);
+}
+
+fn do_lda_zero_page(cpu: &mut Cpu, mem: &mut Mem) {
+    let addr = fetch_next_byte(cpu, mem);
+    cpu.a = read_byte(cpu, mem, addr);
+    lda_set_status(cpu);
+}
+
+fn do_lda_zero_page_x(cpu: &mut Cpu, mem: &mut Mem) {
+    let addr = fetch_next_byte(cpu, mem);
+    cpu.x = cpu.x + addr;
+    cpu.ticks = cpu.ticks + 1;
+    cpu.a = read_byte(cpu, mem, addr);
+    lda_set_status(cpu);
 }
 
 fn execute(cpu: &mut Cpu, mem: &mut Mem) {
@@ -80,12 +145,25 @@ fn execute(cpu: &mut Cpu, mem: &mut Mem) {
 
         // Execute the next instruction.
         match instr {
+
+            // JSR
+            INSTR_JSR => do_jsr(cpu, mem),
+
+            // LDA
             INSTR_LDA_IM => do_lda_im(cpu, mem),
-            INSTR_LDA_ZERO_PAGE => {},
-            INSTR_LDA_ZERO_PAGE_X => {},
+            INSTR_LDA_ZERO_PAGE => do_lda_zero_page(cpu, mem),
+            INSTR_LDA_ZERO_PAGE_X => do_lda_zero_page_x(cpu, mem),
             INSTR_LDA_ABSOLUTE => {},
             INSTR_LDA_ABSOLUTE_X => {},
             INSTR_LDA_ABSOLUTE_Y => {},
+
+            // LDX
+
+            // LDY
+
+            // LSR
+
+            // Unhandled
             _ => println!("Instruction not handled."),
         }
 
